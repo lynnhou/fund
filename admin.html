@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>监控后台管理</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 md:p-8">
+    <div id="app" class="max-w-3xl mx-auto">
+        
+        <div v-if="!isLogged" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl border">
+            <h2 class="text-2xl font-bold text-center mb-6">🔒 管理员验证</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">用户名</label>
+                    <input v-model="loginForm.username" type="text" class="w-full border px-4 py-2 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">密码</label>
+                    <input v-model="loginForm.password" @keyup.enter="handleLogin" type="password" class="w-full border px-4 py-2 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <button @click="handleLogin" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl hover:bg-blue-700 transition">进入控制台</button>
+            </div>
+        </div>
+
+        <div v-else class="space-y-6">
+            <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
+                <div>
+                    <h1 class="text-xl font-bold">⚙️ 系统配置中心</h1>
+                    <p class="text-xs text-gray-400">面向用户的无代码全局配置</p>
+                </div>
+                <div class="space-x-2">
+                    <a href="index.html" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-gray-100">返回前台</a>
+                    <button @click="handleLogout" class="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100">退出</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                <h3 class="text-lg font-bold border-b pb-2">📈 自选基金池</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">需要监控的基金代码（用英文逗号隔开）</label>
+                    <input v-model="fundsInput" type="text" class="w-full border px-4 py-2 rounded-xl font-mono" placeholder="例如: 161725,005827,003096">
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                <h3 class="text-lg font-bold border-b pb-2">🚨 预警触发条件</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">单只基金日内涨幅达多少时提醒 (%)</label>
+                        <input v-model="config.notify.threshold_up" type="number" step="0.1" class="w-full border px-4 py-2 rounded-xl font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">单只基金日内跌幅达多少时提醒 (%)</label>
+                        <input v-model="config.notify.threshold_down" type="number" step="0.1" class="w-full border px-4 py-2 rounded-xl font-mono" placeholder="请输入负数，如 -2">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border space-y-6">
+                <h3 class="text-lg font-bold border-b pb-2">🔔 多通道推送体系（可多选激活）</h3>
+                
+                <div class="border p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold flex items-center gap-2 text-green-600">💬 微信推送 (Server酱渠道)</span>
+                        <input type="checkbox" v-model="config.notify.wechat_enabled" class="w-5 h-5 accent-green-600">
+                    </div>
+                    <div v-if="config.notify.wechat_enabled">
+                        <input v-model="config.notify.wechat_key" type="text" class="w-full border px-4 py-2 rounded-xl font-mono text-sm" placeholder="请输入 Server酱 SendKey (SCT开头)...">
+                    </div>
+                </div>
+
+                <div class="border p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold flex items-center gap-2 text-blue-500">✈️ Telegram 机器人</span>
+                        <input type="checkbox" v-model="config.notify.tg_enabled" class="w-5 h-5 accent-blue-500">
+                    </div>
+                    <div v-if="config.notify.tg_enabled" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input v-model="config.notify.tg_token" type="text" class="w-full border px-4 py-2 rounded-xl font-mono text-sm" placeholder="Bot Token (例如: 1234:AA-BB)...">
+                        <input v-model="config.notify.tg_chatid" type="text" class="w-full border px-4 py-2 rounded-xl font-mono text-sm" placeholder="您的 Chat ID (例如: 98765432)...">
+                    </div>
+                </div>
+
+                <div class="border p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold flex items-center gap-2 text-purple-600">✉️ 邮件 SMTP 直发</span>
+                        <input type="checkbox" v-model="config.notify.email_enabled" class="w-5 h-5 accent-purple-600">
+                    </div>
+                    <div v-if="config.notify.email_enabled" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input v-model="config.notify.email_smtp" type="text" class="w-full border px-4 py-2 rounded-xl text-sm" placeholder="SMTP服务器 (如: smtp.qq.com:465)">
+                        <input v-model="config.notify.email_user" type="text" class="w-full border px-4 py-2 rounded-xl text-sm" placeholder="发件人邮箱账号">
+                        <input v-model="config.notify.email_pass" type="password" class="w-full border px-4 py-2 rounded-xl text-sm" placeholder="邮箱授权码/密码">
+                        <input v-model="config.notify.email_to" type="text" class="w-full border px-4 py-2 rounded-xl text-sm" placeholder="接收通知的邮箱地址">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                <h3 class="text-lg font-bold border-b pb-2">🔑 管理安全</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">修改后台用户名</label>
+                    <input v-model="config.auth.username" type="text" class="w-full border px-4 py-2 rounded-xl font-mono">
+                </div>
+            </div>
+
+            <button @click="saveSettings" class="w-full bg-gradient-to-r from-blue-600 to-teal-500 text-white font-bold py-3.5 rounded-2xl shadow-md hover:opacity-90 transition text-lg">
+                💾 保存全局配置并立即生效
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+        createApp({
+            data() {
+                return {
+                    isLogged: false,
+                    loginForm: { username: '', password: '' },
+                    config: { auth: {}, notify: {} },
+                    fundsInput: ''
+                }
+            },
+            methods: {
+                async checkAuth() {
+                    const res = await fetch('api.php?action=checkAuth');
+                    const json = await res.json();
+                    this.isLogged = json.logged;
+                    if (this.isLogged) this.loadConfig();
+                },
+                async handleLogin() {
+                    const res = await fetch('api.php?action=login', {
+                        method: 'POST',
+                        body: JSON.stringify(this.loginForm)
+                    });
+                    const json = await res.json();
+                    if(json.status === 'success') { this.isLogged = true; this.loadConfig(); }
+                    else alert(json.msg);
+                },
+                async handleLogout() {
+                    await fetch('api.php?action=logout');
+                    this.isLogged = false;
+                },
+                async loadConfig() {
+                    const res = await fetch('api.php?action=getConfig');
+                    this.config = await res.json();
+                    this.fundsInput = this.config.funds.join(',');
+                },
+                async saveSettings() {
+                    this.config.funds = this.fundsInput.split(',').map(s => s.trim()).filter(s => s!=='');
+                    const res = await fetch('api.php?action=saveConfig', {
+                        method: 'POST',
+                        body: JSON.stringify(this.config)
+                    });
+                    const json = await res.json();
+                    alert(json.msg);
+                }
+            },
+            mounted() { this.checkAuth(); }
+        }).mount('#app');
+    </script>
+</body>
+</html>
